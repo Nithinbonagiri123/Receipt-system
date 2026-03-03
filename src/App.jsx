@@ -1,8 +1,36 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { CalendarDays, Download, FileText, Globe, Receipt } from 'lucide-react'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 
-const CASE_TYPES = ['stamp 2', 'stamp 1g', 'stamp 1']
+const CASE_TYPES = [
+  'Critical Skills Employment Permit (CSEP)',
+  'General Employment Permit (GEP)',
+  'Change of Employer on Same Employment Permit (switching employer)',
+  'Renewal of Employment Permit (same employer)',
+  'Stamp 1G Extension',
+  'Stamp 1G Extension (Surveying)',
+  'Stamp 1G Extension (Reactivation of Employment Permit)',
+  'IRP Card Renewal (Stamp 1, 2, 3, 4, 0, EUFAM, Dependent etc)',
+  'Stamp Regularisation (Stamp 2, Stamp 3, Stamp 2/3, Stamp 1G Dependent)',
+  'Short Stay C - Tourist Visa',
+  'Short Stay C - Business Visa',
+  'Long Stay D - Entry Reunification Visa',
+  'Long Stay D - De facto Visa (Permanent Irish partner (Irish citizen, Stamp 4 holder, work permit holder) for residence and/or permission card 90 days)',
+  'EUFAM - Qualifying Family Member (spouse, civil partner child of an EU citizen)',
+  'EUFAM - Permitted Family Member (de facto partner and dependent relative)',
+  'Permission to Apply: Elder divorce, civil break up - Non EU family member keeps their permission in circumstances',
+  'Permanent Residence Card (after holding Stamp 4 EUFAM for 5 continuous years)',
+  'De facto Residence Permission',
+  'De Facto Renewal (Stamp 4 extension)',
+  'Adult Naturalisation (6 years of residence for nationals)',
+  'Citizenship by Marriage (3 year rule - for spouse and civil partner of Irish citizen)',
+  'Minor Child Citizenship (General applications) (cases children not automatically Irish - 5 years of residence)',
+  'Irish - with annualised parents (had dependent/children on EUFAM)',
+  'Citizenship for Children born in Ireland (3 year rule - for non-Irish)',
+  'Refugee/International Protection Citizenship (5 year rule)',
+  'Foreign Birth Registration (Adult)',
+  'Foreign Birth Registration (Minor, under 18)',
+]
 const VAT_RATE = 0.23
 const GOV_RATE = 0.1
 const TEMPLATE_PANEL_WIDTH = 255
@@ -34,7 +62,9 @@ const todayLabel = () =>
 function App() {
   const [customerName, setCustomerName] = useState('')
   const [contactInfo, setContactInfo] = useState('')
-  const [caseType, setCaseType] = useState(CASE_TYPES[0])
+  const [caseType, setCaseType] = useState('')
+  const [caseTypeQuery, setCaseTypeQuery] = useState('')
+  const [isCaseTypeOpen, setIsCaseTypeOpen] = useState(false)
   const [region, setRegion] = useState('EU')
   const [ablPrice, setAblPrice] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState(createInvoiceNumber())
@@ -42,6 +72,7 @@ function App() {
   const [hasGenerated, setHasGenerated] = useState(false)
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false)
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false)
+  const caseTypeWrapRef = useRef(null)
 
   const totals = useMemo(() => {
     const subtotal = Number.parseFloat(ablPrice) || 0
@@ -50,6 +81,12 @@ function App() {
     const grandTotal = subtotal + vatAmount + govCharge
     return { subtotal, vatAmount, govCharge, grandTotal }
   }, [ablPrice, region])
+
+  const filteredCaseTypes = useMemo(() => {
+    const q = caseTypeQuery.trim().toLowerCase()
+    if (!q) return CASE_TYPES
+    return CASE_TYPES.filter((t) => t.toLowerCase().includes(q))
+  }, [caseTypeQuery])
 
   const handleGenerate = () => {
     setInvoiceNumber(createInvoiceNumber())
@@ -65,9 +102,12 @@ function App() {
     }
 
     try {
-      const res = await fetch('/Template.pdf')
+      const templateUrl = `${import.meta.env.BASE_URL}payment-receipt-ning.pdf`
+      const res = await fetch(templateUrl)
       if (!res.ok) {
-        alert('Template.pdf not found. Add Template.pdf to the public/ folder.')
+        alert(
+          `Template PDF not found at ${templateUrl}. Make sure payment-receipt-ning.pdf is in public/.`,
+        )
         return
       }
       const templateBytes = await res.arrayBuffer()
@@ -78,9 +118,11 @@ function App() {
       const { width, height } = page.getSize()
 
       const panelX = width - TEMPLATE_PANEL_WIDTH - 36
-      const panelTop = height - 44
+      // Move the printed block further down the page (50 + 70 + 100 = 220 units)
+      const panelTop = height - 44 - 220
       const panelY = panelTop - TEMPLATE_PANEL_HEIGHT
-      const rowHeight = 17
+      // Increase vertical spacing so there is a clear gap between each printed line
+      const rowHeight = 27
       const labelX = panelX + 12
       const valueX = panelX + TEMPLATE_PANEL_WIDTH - 12
       const oneLine = (value, maxLength = 24) => {
@@ -89,22 +131,12 @@ function App() {
         return `${compact.slice(0, maxLength - 1)}...`
       }
 
-      page.drawRectangle({
-        x: panelX,
-        y: panelY,
-        width: TEMPLATE_PANEL_WIDTH,
-        height: TEMPLATE_PANEL_HEIGHT,
-        color: rgb(1, 1, 1),
-        borderColor: rgb(0.8, 0.83, 0.88),
-        borderWidth: 1,
-      })
-
       page.drawText(documentType === 'INVOICE' ? 'INVOICE DETAILS' : 'RECEIPT DETAILS', {
         x: labelX,
         y: panelTop - 20,
-        size: 12,
+        size: 14,
         font: helveticaBold,
-        color: rgb(0.07, 0.07, 0.07),
+        color: rgb(0, 0, 0),
       })
 
       let y = panelTop - 44
@@ -112,35 +144,41 @@ function App() {
         page.drawText(label, {
           x: labelX,
           y,
-          size: 10,
+          size: 12,
           font: strong ? helveticaBold : helvetica,
-          color: rgb(0.25, 0.3, 0.38),
+          color: rgb(0, 0, 0),
         })
         const text = oneLine(value)
         page.drawText(text, {
-          x: valueX - helvetica.widthOfTextAtSize(text, 10),
+          x: valueX - helvetica.widthOfTextAtSize(text, 12),
           y,
-          size: 10,
+          size: 12,
           font: strong ? helveticaBold : helvetica,
-          color: rgb(0.07, 0.07, 0.07),
+          color: rgb(0, 0, 0),
         })
         y -= rowHeight
       }
 
-      drawRow('Type', documentType === 'INVOICE' ? 'Invoice' : 'Receipt', true)
-      if (documentType === 'RECEIPT') {
-        drawRow('Status', 'Payment Received', true)
+      if (documentType === 'INVOICE') {
+        drawRow('Type', 'Invoice', true)
+        drawRow('Invoice Number', invoiceNumber)
+        drawRow('Date of Receipt', invoiceDate)
+        drawRow('To', customerName || 'N/A')
+        drawRow('Address', contactInfo || 'N/A')
+        drawRow('Case Type', caseType || 'N/A')
+        drawRow('Payment Method', region === 'EU' ? 'Bank Transfer' : 'Revolut')
+        drawRow('Amount', formatMoney(totals.grandTotal), true)
+      } else {
+        drawRow('Type', 'Receipt', true)
+        drawRow('Amount Received', formatMoney(totals.grandTotal), true)
+        drawRow('Date of Receipt', invoiceDate)
+        drawRow('To', customerName || 'N/A')
+        drawRow('Address', contactInfo || 'N/A')
+        drawRow('Re: Invoice Number', invoiceNumber)
+        drawRow('Payment Method', region === 'EU' ? 'Bank Transfer' : 'Revolut')
+        drawRow('Remaining Balance (if any)', formatMoney(0))
+        drawRow('Notes (Optional)', caseType || 'N/A')
       }
-      drawRow('Invoice No.', invoiceNumber)
-      drawRow('Date', invoiceDate)
-      drawRow('Customer', customerName || 'N/A')
-      drawRow('Contact', contactInfo || 'N/A')
-      drawRow('Case Type', caseType || 'N/A')
-      drawRow('Region', region === 'EU' ? 'EU Case' : 'Non-EU Case')
-      drawRow('Subtotal', formatMoney(totals.subtotal))
-      drawRow('VAT', formatMoney(totals.vatAmount))
-      drawRow('Gov Charge', formatMoney(totals.govCharge))
-      drawRow('Grand Total', formatMoney(totals.grandTotal), true)
 
       const rendered = await pdfDoc.save()
       const blob = new Blob([rendered], { type: 'application/pdf' })
@@ -155,7 +193,7 @@ function App() {
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Template PDF generation failed', error)
-      alert('Could not generate PDF. Please try again.')
+      alert(`Could not generate PDF: ${error?.message || String(error)}`)
     } finally {
       if (documentType === 'INVOICE') {
         setIsDownloadingInvoice(false)
@@ -200,18 +238,56 @@ function App() {
             </label>
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-700">Case Type</span>
-              <input
-                list="case-types"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                value={caseType}
-                onChange={(e) => setCaseType(e.target.value)}
-                placeholder="Search case type"
-              />
-              <datalist id="case-types">
-                {CASE_TYPES.map((type) => (
-                  <option key={type} value={type} />
-                ))}
-              </datalist>
+              <div
+                ref={caseTypeWrapRef}
+                className="relative"
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setIsCaseTypeOpen(false)
+                    setCaseTypeQuery(caseType)
+                  }
+                }}
+              >
+                <input
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-blue-500"
+                  value={caseTypeQuery}
+                  onFocus={() => setIsCaseTypeOpen(true)}
+                  onChange={(e) => {
+                    setCaseTypeQuery(e.target.value)
+                    setIsCaseTypeOpen(true)
+                  }}
+                  placeholder="Select option"
+                  aria-label="Case Type"
+                />
+
+                {isCaseTypeOpen && (
+                  <div
+                    className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                    role="listbox"
+                    tabIndex={-1}
+                  >
+                    {filteredCaseTypes.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-black">No results</div>
+                    ) : (
+                      filteredCaseTypes.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className="block w-full cursor-pointer px-3 py-2 text-left text-sm text-black hover:bg-slate-100"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setCaseType(type)
+                            setCaseTypeQuery(type)
+                            setIsCaseTypeOpen(false)
+                          }}
+                        >
+                          {type}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </label>
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-slate-700">Region</span>
@@ -346,6 +422,7 @@ function App() {
               </table>
             </div>
           </article>
+
           <article className="min-h-[400px] rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
             <header className="mb-8 flex items-start justify-between border-b border-slate-200 pb-4">
               <div>
