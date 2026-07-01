@@ -9,6 +9,11 @@ const SAMPLE = {
   invoiceNumber: 'EXT-NG-105',
   date: '20 May 2026',
   clientName: 'SADZAUCHI Patience',
+  // Paragraph 36 (plain, 15pt bold) — anchor + style donor for the Gov Fee
+  // description row. Inserting after this paragraph places Gov Fee directly
+  // below "(Reactivation of Employment Permit)" in the Description column,
+  // and cloning its rPr keeps the font metrics identical to the amount cell.
+  descriptionStyleDonor: '(Reactivation of Employment Permit)',
   subtotal: '€ 649.59',
   vat: '€ 149.41',
   total: '€ 799',
@@ -35,18 +40,58 @@ async function loadTemplate() {
 
 export async function generateInvoiceDocx(row) {
   const templateBytes = await loadTemplate()
+  const hasGovFee = Number.isFinite(row.govFee) && row.govFee > 0
+  // Split the item row when a Gov Fee is present: the STAMP line now covers
+  // ABL + Other Fees, and a second line under it shows the Gov Fee value.
+  // Sub-total below stays at ABL + Gov + Other so amounts still reconcile.
+  const stampAmount = hasGovFee ? row._subtotal - row.govFee : row._subtotal
+
   const replacements = [
     [SAMPLE.invoiceNumber, row.invoiceNumber || '—'],
     [SAMPLE.date, row.date || '—'],
     [SAMPLE.clientName, row.clientName || '—'],
-    // Order matters: replace subtotal (which appears twice) before VAT/total
-    // to avoid the shorter '€ 799' pattern accidentally landing inside a
-    // freshly-substituted value.
-    [SAMPLE.subtotal, money(row._subtotal)],
+    // Money substitutions run longest-sample first so a freshly-written
+    // amount like "€ 799.00" can't later be matched by the shorter "€ 799"
+    // sample when the row totals happen to collide with sample values.
     [SAMPLE.vat, money(row.vat)],
     [SAMPLE.total, money(row.total)],
+    // Amount column (paragraph 61) — first occurrence of "€ 649.59".
+    [SAMPLE.subtotal, money(stampAmount), { occurrence: 0 }],
+    // Sub-total row — after the first was consumed, this is now the first
+    // remaining occurrence of the original "€ 649.59" sample.
+    [SAMPLE.subtotal, money(row._subtotal), { occurrence: 0 }],
   ]
-  return fillDocxTemplate(templateBytes, replacements)
+
+  // When Gov Fee > 0, insert one extra row in each of the description and
+  // amount columns.
+  //
+  // Description column: "Gov Fee" goes right under "(Reactivation of
+  // Employment Permit)" (cloned from the same paragraph so it inherits the
+  // plain 15pt styling).
+  //
+  // Amount column: "€ (Gov Fee)" needs to line up visually with "Gov Fee",
+  // which sits below TWO wrapped lines of "(Reactivation of Employment
+  // Permit)". Two BodyText spacer paragraphs before "€ (Gov Fee)" push it
+  // down by about the same distance so the two rows line up.
+  const paragraphInsertions = hasGovFee
+    ? [
+        {
+          afterAnchorText: SAMPLE.descriptionStyleDonor,
+          cloneFromText: SAMPLE.descriptionStyleDonor,
+          newText: 'Gov Fee',
+        },
+        {
+          afterAnchorText: SAMPLE.subtotal,
+          cloneFromText: SAMPLE.subtotal,
+          newText: money(row.govFee),
+          spacersBefore: 2,
+        },
+      ]
+    : []
+
+  return fillDocxTemplate(templateBytes, replacements, {
+    insertParagraphsAfter: paragraphInsertions,
+  })
 }
 
 export function resetTemplateCache() {
