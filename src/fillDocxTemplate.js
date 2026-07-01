@@ -157,16 +157,42 @@ export async function fillDocxTemplate(templateBytes, replacements, options = {}
   // clone's text (or, if the clone was seeded with a literal value, leave it
   // as-is). Each entry: { afterAnchorText, cloneFromText, newText }.
   const insertions = options.insertParagraphsAfter || []
-  // Minimal BodyText-styled empty paragraph — used to push a following clone
-  // down by roughly one line, so a new row in one column can line up with a
-  // row further down in another column.
-  const BLANK_SPACER = '<w:p><w:pPr><w:pStyle w:val="BodyText"/></w:pPr></w:p>'
+  // BodyText spacer at 15pt — matches the spacers already in the template's
+  // amount column so a swap keeps the column's total height constant.
+  const BLANK_SPACER =
+    '<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:rPr><w:sz w:val="30"/></w:rPr></w:pPr></w:p>'
   for (const step of insertions) {
     const donor = findParagraphContaining(xml, step.cloneFromText)
     if (!donor) continue
     const clone = rewriteParagraphText(donor.xml, step.newText)
     const spacers = BLANK_SPACER.repeat(step.spacersBefore || 0)
-    xml = insertAfterParagraphContaining(xml, step.afterAnchorText, spacers + clone)
+    const content = spacers + clone
+
+    const anchor = findParagraphContaining(xml, step.afterAnchorText)
+    if (!anchor) continue
+
+    // Insert the new content right after the anchor paragraph.
+    xml = xml.slice(0, anchor.end) + content + xml.slice(anchor.end)
+
+    // Optionally delete N blank paragraphs immediately after our insertion.
+    // In multi-column sections the alignment between two columns depends on
+    // both having the same paragraph count, so adding rows in one column
+    // must be balanced by removing empty rows further down that same column.
+    let deleteRemaining = step.deleteBlanksAfter || 0
+    let cursor = anchor.end + content.length
+    while (deleteRemaining > 0 && xml.startsWith('<w:p', cursor)) {
+      const closeIdx = xml.indexOf('</w:p>', cursor)
+      if (closeIdx === -1) break
+      const paraEnd = closeIdx + '</w:p>'.length
+      const paraXml = xml.slice(cursor, paraEnd)
+      const textNodes = [
+        ...paraXml.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g),
+      ]
+      const concat = textNodes.map((n) => n[1]).join('').trim()
+      if (concat) break // Stop at the first paragraph that has real content.
+      xml = xml.slice(0, cursor) + xml.slice(paraEnd)
+      deleteRemaining -= 1
+    }
   }
 
   xml = substituteTextNodes(xml, replacements)

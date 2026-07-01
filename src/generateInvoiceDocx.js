@@ -85,6 +85,12 @@ export async function generateInvoiceDocx(row) {
           cloneFromText: SAMPLE.subtotal,
           newText: money(row.govFee),
           spacersBefore: 2,
+          // 2 spacers + 1 Gov Fee row = 3 new paragraphs in the amount column.
+          // Reclaim that height by deleting 3 of the template's own blank
+          // spacers that sit between the item amount and the sub-total value,
+          // so the sub-total / VAT / total values keep lining up with their
+          // labels in the adjacent column.
+          deleteBlanksAfter: 3,
         },
       ]
     : []
