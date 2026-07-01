@@ -132,9 +132,16 @@ function BatchGenerator() {
       {fileName && (
         <p className="mb-3 text-sm text-slate-600">
           <span className="font-medium text-slate-900">File:</span> {fileName}
+          {sheetInfo && (
+            <span className="ml-3 text-slate-500">
+              Sheet: <span className="font-mono">{sheetInfo.sheetName}</span>
+              {' '}· Headers on row {sheetInfo.headerIndex + 1}
+              {' '}· {sheetInfo.matchedFields} column{sheetInfo.matchedFields === 1 ? '' : 's'} mapped
+            </span>
+          )}
           {rows.length > 0 && (
             <span className="ml-3 text-slate-500">
-              {rows.length} row{rows.length === 1 ? '' : 's'} detected
+              · {rows.length} row{rows.length === 1 ? '' : 's'} detected
             </span>
           )}
         </p>
