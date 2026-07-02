@@ -9,6 +9,8 @@ const SAMPLE = {
   invoiceNumber: 'EXT-NG-105',
   date: '20 May 2026',
   clientName: 'SADZAUCHI Patience',
+  // Paragraph 35 (Heading1) — the item's main title in the template.
+  descriptionMain: 'STAMP 1 EXTENSION',
   // Paragraph 36 (plain, 15pt bold) — anchor + style donor for the Gov Fee
   // description row. Inserting after this paragraph places Gov Fee directly
   // below "(Reactivation of Employment Permit)" in the Description column,
@@ -17,6 +19,21 @@ const SAMPLE = {
   subtotal: '€ 649.59',
   vat: '€ 149.41',
   total: '€ 799',
+}
+
+// Split "Stamp 1G Extension (Reactivation of Employment Permit)" into
+// { main: "Stamp 1G Extension", subtitle: "(Reactivation of Employment Permit)" }
+// so the two-tier styling of the template (Heading1 + plain 15pt bold) is
+// preserved when the row's Package name gets substituted in.
+const splitPackageName = (raw) => {
+  const trimmed = String(raw || '').trim()
+  if (!trimmed) return null
+  const parenIdx = trimmed.indexOf('(')
+  if (parenIdx === -1) return { main: trimmed, subtitle: '' }
+  return {
+    main: trimmed.slice(0, parenIdx).trim(),
+    subtitle: trimmed.slice(parenIdx).trim(),
+  }
 }
 
 const money = (n) => {
@@ -61,6 +78,16 @@ export async function generateInvoiceDocx(row) {
     // remaining occurrence of the original "€ 649.59" sample.
     [SAMPLE.subtotal, money(row._subtotal), { occurrence: 0 }],
   ]
+
+  // Replace the sample description ("STAMP 1 EXTENSION (Reactivation of
+  // Employment Permit)") with the row's Package name. If the Package name
+  // cell is empty, leave the sample text as a placeholder so the doc still
+  // looks intentional.
+  const pkg = splitPackageName(row.packageName)
+  if (pkg) {
+    replacements.push([SAMPLE.descriptionMain, pkg.main])
+    replacements.push([SAMPLE.descriptionStyleDonor, pkg.subtitle])
+  }
 
   // When Gov Fee > 0, insert one extra row in each of the description and
   // amount columns.

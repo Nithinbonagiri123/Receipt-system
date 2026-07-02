@@ -13,6 +13,16 @@ const FIELD_KEYWORDS = {
   total: ['total', 'grandtotal', 'amount'],
   paid: ['paid', 'amountpaid'],
   outstanding: ['outstanding', 'balance', 'remaining', 'due'],
+  packageName: [
+    'packagename',
+    'package',
+    'servicename',
+    'service',
+    'casetype',
+    'productname',
+    'product',
+    'description',
+  ],
 }
 
 const normaliseHeader = (header) =>
@@ -141,6 +151,7 @@ export async function parseInvoiceSheet(file) {
       date: '',
       invoiceNumber: '',
       clientName: '',
+      packageName: '',
       ablFee: 0,
       govFee: 0,
       otherFees: 0,
@@ -150,13 +161,13 @@ export async function parseInvoiceSheet(file) {
       outstanding: 0,
     }
 
+    const STRING_FIELDS = new Set(['clientName', 'invoiceNumber', 'packageName'])
     for (const [colIndexStr, field] of Object.entries(columnToField)) {
       const raw = cells[Number(colIndexStr)]
       if (field === 'date') {
         row.date = parseDate(raw)
-      } else if (field === 'clientName' || field === 'invoiceNumber') {
-        row.clientName = field === 'clientName' ? String(raw ?? '').trim() : row.clientName
-        row.invoiceNumber = field === 'invoiceNumber' ? String(raw ?? '').trim() : row.invoiceNumber
+      } else if (STRING_FIELDS.has(field)) {
+        row[field] = String(raw ?? '').trim()
       } else {
         row[field] = parseNumber(raw)
       }

@@ -180,6 +180,7 @@ function BatchGenerator() {
                 <th className="px-3 py-2 text-left font-semibold">Date</th>
                 <th className="px-3 py-2 text-left font-semibold">Invoice #</th>
                 <th className="px-3 py-2 text-left font-semibold">Client</th>
+                <th className="px-3 py-2 text-left font-semibold">Package</th>
                 <th className="px-3 py-2 text-right font-semibold">ABL</th>
                 <th className="px-3 py-2 text-right font-semibold">Gov</th>
                 <th className="px-3 py-2 text-right font-semibold">Other</th>
@@ -194,6 +195,7 @@ function BatchGenerator() {
                   <td className="px-3 py-2">{row.date || '—'}</td>
                   <td className="px-3 py-2 font-mono">{row.invoiceNumber || '—'}</td>
                   <td className="px-3 py-2">{row.clientName || '—'}</td>
+                  <td className="px-3 py-2 text-slate-700">{row.packageName || '—'}</td>
                   <td className="px-3 py-2 text-right">{money(row.ablFee)}</td>
                   <td className="px-3 py-2 text-right">{money(row.govFee)}</td>
                   <td className="px-3 py-2 text-right">{money(row.otherFees)}</td>
